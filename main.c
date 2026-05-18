@@ -4,31 +4,38 @@
 #include "simulador.h"
 
 int main() {
-    int memoria[256]     = {0};
+    int memoria[256] = {0};
     int registradores[8] = {0};
-    int PC               = 0;
-    int num_instrucoes   = 0;
+    int PC = 0;
+    int num_instrucoes = 0;
     int opcao;
 
-    printf("=======================================\n");
-    printf("     SIMULADOR MIPS MULTICICLO\n");
-    printf("=======================================\n");
+    printf("         =======================================\n");
+    printf("              SIMULADOR MIPS MULTICICLO\n");
+    printf("         =======================================\n");
 
     inicializar_registradores(registradores);
-
     do {
-        printf("\n-------- Menu do Simulador Mini MIPS --------\n");
-        printf("1 - Carregar memoria (.mem)\n");
-        printf("2 - Imprimir memorias\n");
-        printf("3 - Imprimir registradores\n");
-        printf("4 - Executar programa (Run)\n");
-        printf("5 - Executar um ciclo (Step)\n");
-        printf("6 - Estatisticas\n");
-        printf("---------------------------------------------\n");
-        printf("0 - Sair\n");
-        printf("Escolha: ");
+        printf("\n");
+        printf(" ╔══════════════════════════════════════════════════╗\n");
+        printf(" ║           Menu do Simulador MiniMips             ║\n");
+        printf(" ╠══════════════════════════════════════════════════╣\n");
+        printf(" ║                                                  ║\n");
+        printf(" ║         [1] Carregar memoria (.mem)              ║\n");
+        printf(" ║         [2] Imprimir memorias                    ║\n");
+        printf(" ║         [3] Imprimir registradores               ║\n");
+        printf(" ║                                                  ║\n");
+        printf(" ║         [4] Executar programa  (Run)             ║\n");
+        printf(" ║         [5] Executar um ciclo  (Step)            ║\n");
+        printf(" ║                                                  ║\n");
+        printf(" ║         [6] Estatisticas                         ║\n");
+        printf(" ║         [0] Sair                                 ║\n");
+        printf(" ║                                                  ║\n");
+        printf(" ╚══════════════════════════════════════════════════╝\n");
+        printf("\n Escolha: ");
         scanf("%d", &opcao);
         getchar();
+
 
         switch (opcao) {
             case 1: {
