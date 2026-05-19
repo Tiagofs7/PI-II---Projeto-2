@@ -55,8 +55,7 @@ int main() {
                 printf("Carregue um arquivo .mem primeiro.\n"); 
                 break; 
             }
-                imprimir_memoria_instrucao(memoria, num_instrucoes);
-                imprimir_memoria_dados(memoria, 128, 255);
+                imprimir_memoria_ID(memoria, num_instrucoes, 256 - num_instrucoes);
                 break;
             case 3:
                 imprimir_registradores(registradores);
@@ -77,7 +76,7 @@ int main() {
                     imprimir_registradores(registradores);
                 }
                 printf("--- Execucao concluida ---\n");
-                imprimir_memoria_dados(memoria, 128, 255);
+                imprimir_memoria_ID(memoria, num_instrucoes, 256 - num_instrucoes);
                 break;
             }
             case 5: {
