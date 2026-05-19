@@ -29,6 +29,7 @@ int main() {
         printf(" |         [5] Executar um ciclo  (Step)            |\n");
         printf(" |                                                  |\n");
         printf(" |         [6] Estatisticas                         |\n");
+        printf(" ║         [7] Mostrar Assembly                     ║\n");
         printf(" |         [0] Sair                                 |\n");
         printf(" |                                                  |\n");
         printf(" ----------------------------------------------------\n");
@@ -101,6 +102,16 @@ int main() {
             case 6:
                 printf("Funcao nao implementada.\n");
                 break;
+            case 7: {
+            if (num_instrucoes == 0) { printf("Carregue um arquivo .mem primeiro.\n"); break; }
+                 printf("\n=== Assembly ===\n");
+                    for (int i = 0; i < num_instrucoes; i++) {
+                            char asm_str[64];
+                 instrucao_para_asm(memoria[i], asm_str);
+                 printf("mem[%d]: %s\n", i, asm_str);
+                }
+    break;
+}
             case 0:
                 printf("Saindo...\n");
                 break;
