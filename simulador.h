@@ -22,8 +22,15 @@ typedef struct decode{
     int addr;
 } decode;
 typedef struct sinaisControle {
-    int PCEsc, IouD, EscMem, IREsc;
-    int LerRegs, LerMem, MemParaReg, EscReg, RegDst;
+    int PCEsc;
+    int IouD;
+    int EscMem; 
+    int IREsc;
+    int LerRegs;
+    int LerMem; 
+    int MemParaReg; 
+    int EscReg;
+    int RegDst;
     int ULAFonteA, ULAFonteB, ULAControle, PCFonte, Branch;
 } sinaisControle;
 
@@ -41,8 +48,7 @@ int leitura_arquivo_mem(int memoria[], char nome_arquivo[]);
 void instrucao_para_asm(int instrucao, char *buf);
 void imprimir_estado_cpu(int PC);
 void imprimir_registradores(int registradores[]);
-void imprimir_memoria_instrucao(int memoria[], int num_instr);
-void imprimir_memoria_dados(int memoria[], int inicio, int fim);
+void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados);
 
 
 extern int RI, A, B, ULAout, RDM, estado;
