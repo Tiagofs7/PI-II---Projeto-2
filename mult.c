@@ -14,16 +14,16 @@ void instrucao_para_asm(int instrucao, char *buf) {
     int rs   = (instrucao >> 9)  & 0x7;
     int rt   = (instrucao >> 6)  & 0x7;
     int rd   = (instrucao >> 3)  & 0x7;
-    int fn   =  instrucao        & 0x7;
-    int imm  =  instrucao        & 0x3F; if (imm >= 32) imm -= 64;
+    int fn   =  instrucao & 0x7;
+    int imm  =  instrucao & 0x3F; if (imm >= 32) imm -= 64;
 
-    if      (op == 0)  sprintf(buf, "tipo R: $%d = $%d op $%d (funct=%d)", rd, rs, rt, fn);
+    if (op == 0) sprintf(buf, "tipo R: $%d = $%d op $%d (funct=%d)", rd, rs, rt, fn);
     else if (op == 4)  sprintf(buf, "addi $%d = $%d + %d", rt, rs, imm);
     else if (op == 8)  sprintf(buf, "beq $%d, $%d, %d",    rs, rt, imm);
     else if (op == 11) sprintf(buf, "lw $%d, %d($%d)",     rt, imm, rs);
     else if (op == 15) sprintf(buf, "sw $%d, %d($%d)",     rt, imm, rs);
     else if (op == 2)  sprintf(buf, "jump %d", instrucao & 0xFF);
-    else               sprintf(buf, "op=%d", op);
+    else sprintf(buf, "op=%d", op);
 }
 
 void escolher_arquivo_mem(char nome_arquivo[]){
@@ -281,21 +281,21 @@ void imprimir_registradores(int registradores[]) {
         printf("$%d = %d\n", i, registradores[i]);
     }
 }
-void imprimir_memoria_instrucao(int memoria[], int num_instr) {
-    printf("\n=== Memória de Instruções ===\n");
-    for (int i = 0; i < num_instr; i++) {
+void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados) {
+    printf("\n=== MEMÓRIA ===\n\n");
+    for (int i = 0; i < num_instrucoes; i++) {
         char buf[100];
         instrucao_para_asm(memoria[i], buf);
         printf("mem[%d] = %d -> %s\n", i, memoria[i], buf);
     }
-}
-void imprimir_memoria_dados(int memoria[], int inicio, int fim) {
-    printf("\n=== Memória de Dados ===\n");
-    for (int i = inicio; i <= fim; i++) {
+    int inicio_dados = num_instrucoes;
+    int fim_dados = num_instrucoes + tam_dados - 1;
+    
+    for (int i = inicio_dados; i <= fim_dados; i++) {
         printf("mem[%d] = %d\n", i, memoria[i]);
     }
 }
-void step(int memoria_instrucao[], int registradores[], int *PC){
+void step(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes){
     ciclo(memoria_instrucao, registradores, PC);
     imprimir_estado_cpu(*PC);
     imprimir_registradores(registradores);
@@ -307,6 +307,5 @@ void run(int memoria_instrucao[], int registradores[], int *PC, int num_instruco
         imprimir_estado_cpu(*PC);
         imprimir_registradores(registradores);
     }
-    imprimir_memoria_instrucao(memoria_instrucao, num_instrucoes);
-    imprimir_memoria_dados(memoria_instrucao, num_instrucoes, 255);
+    imprimir_memoria_ID(memoria_instrucao, num_instrucoes, 256 - num_instrucoes);
 }
