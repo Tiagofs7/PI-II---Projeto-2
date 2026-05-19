@@ -9,29 +9,29 @@ int main() {
     int PC = 0;
     int num_instrucoes = 0;
     int opcao;
-
-    printf("         =======================================\n");
+    printf("\n");
+    printf("         ---------------------------------------\n");
     printf("              SIMULADOR MIPS MULTICICLO\n");
-    printf("         =======================================\n");
+    printf("         ---------------------------------------\n");
 
     inicializar_registradores(registradores);
     do {
         printf("\n");
-        printf(" ╔══════════════════════════════════════════════════╗\n");
-        printf(" ║           Menu do Simulador MiniMips             ║\n");
-        printf(" ╠══════════════════════════════════════════════════╣\n");
-        printf(" ║                                                  ║\n");
-        printf(" ║         [1] Carregar memoria (.mem)              ║\n");
-        printf(" ║         [2] Imprimir memorias                    ║\n");
-        printf(" ║         [3] Imprimir registradores               ║\n");
-        printf(" ║                                                  ║\n");
-        printf(" ║         [4] Executar programa  (Run)             ║\n");
-        printf(" ║         [5] Executar um ciclo  (Step)            ║\n");
-        printf(" ║                                                  ║\n");
-        printf(" ║         [6] Estatisticas                         ║\n");
-        printf(" ║         [0] Sair                                 ║\n");
-        printf(" ║                                                  ║\n");
-        printf(" ╚══════════════════════════════════════════════════╝\n");
+        printf(" ----------------------------------------------------\n");
+        printf(" |           Menu do Simulador MiniMips             |\n");
+        printf(" |--------------------------------------------------|\n");
+        printf(" |                                                  |\n");
+        printf(" |         [1] Carregar memoria (.mem)              |\n");
+        printf(" |         [2] Imprimir memorias                    |\n");
+        printf(" |         [3] Imprimir registradores               |\n");
+        printf(" |                                                  |\n");
+        printf(" |         [4] Executar programa  (Run)             |\n");
+        printf(" |         [5] Executar um ciclo  (Step)            |\n");
+        printf(" |                                                  |\n");
+        printf(" |         [6] Estatisticas                         |\n");
+        printf(" |         [0] Sair                                 |\n");
+        printf(" |                                                  |\n");
+        printf(" ----------------------------------------------------\n");
         printf("\n Escolha: ");
         scanf("%d", &opcao);
         getchar();
@@ -42,6 +42,7 @@ int main() {
                 char nome[100];
                 printf("Nome do arquivo .mem: ");
                 scanf("%s", nome);
+                printf("Arquivo carregado: %s\n", nome);
                 getchar();
                 memset(memoria, 0, sizeof(memoria));
                 PC = 0;
@@ -75,7 +76,7 @@ int main() {
                     imprimir_estado_cpu(PC);
                     imprimir_registradores(registradores);
                 }
-                printf("--- Execucao concluida ---\n");
+                printf("\n--- Execucao concluida ---\n");
                 imprimir_memoria_ID(memoria, num_instrucoes, 256 - num_instrucoes);
                 break;
             }
