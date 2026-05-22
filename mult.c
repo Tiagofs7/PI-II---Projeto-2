@@ -408,7 +408,6 @@ void ciclo(int mem[], int regs[], int *PC) {
 }
 void imprimir_estado_cpu(int PC, int *regs){
     printf("\n=== Estado da CPU ===\n");
-    printf("PC = %d\n", PC);
     printf("RI = %d\n", RI);
     printf("ULAout = %d\n", ULAout);
     printf("RDM = %d\n", RDM);
@@ -569,7 +568,7 @@ void step(int memoria_instrucao[], int registradores[], int *PC, int num_instruc
 }
 
 void run(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes) {
-    while (estado != BUSCA || *PC < num_instrucoes) {
+    while (estado != BUSCA || *PC < 128) {
         printf("\n--- STEP ---\n");
         ciclo(memoria_instrucao, registradores, PC);        
         imprimir_estado_cpu(*PC, registradores);
