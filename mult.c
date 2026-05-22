@@ -3,11 +3,45 @@
 #include <string.h>
 #include "simulador.h"
 
+#define MAX_HISTORICO 1000
+
+typedef struct {
+    int memoria[256];
+    int registradores[8];
+    int PC;
+    int RI;
+    int A;
+    int B;
+    int ULAout;
+    int RDM;
+    int estado;
+    int ciclos_executados;
+    int instrucoes_executadas;
+    int qtd_tipo_r;
+    int qtd_addi;
+    int qtd_beq;
+    int qtd_lw;
+    int qtd_sw;
+    int qtd_jump;
+    int qtd_invalidas;
+} EstadoSimulador;
+
 int RI;
 int A,B;
 int ULAout;
 int RDM;
 int estado = BUSCA;
+int ciclos_executados = 0;
+int instrucoes_executadas = 0;
+int qtd_tipo_r = 0;
+int qtd_addi = 0;
+int qtd_beq = 0;
+int qtd_lw = 0;
+int qtd_sw = 0;
+int qtd_jump = 0;
+int qtd_invalidas = 0;
+EstadoSimulador historico[MAX_HISTORICO];
+int topo_historico = 0;
 
 void instrucao_para_asm(int instrucao, char *buf) {
     int op   = (instrucao >> 12) & 0xF;
@@ -87,6 +121,81 @@ void inicializar_registradores(int registradores[]) {
     for (int i = 0; i < 8; i++) {
         registradores[i] = 0;
     }
+}
+
+void salvar_estado(int memoria[], int registradores[], int PC) {
+    if (topo_historico >= MAX_HISTORICO) {
+        printf("Historico cheio. Nao foi possivel salvar este estado.\n");
+        return;
+    }
+
+    for (int i = 0; i < 256; i++) {
+        historico[topo_historico].memoria[i] = memoria[i];
+    }
+
+    for (int i = 0; i < 8; i++) {
+        historico[topo_historico].registradores[i] = registradores[i];
+    }
+
+    historico[topo_historico].PC = PC;
+    historico[topo_historico].RI = RI;
+    historico[topo_historico].A = A;
+    historico[topo_historico].B = B;
+    historico[topo_historico].ULAout = ULAout;
+    historico[topo_historico].RDM = RDM;
+    historico[topo_historico].estado = estado;
+    historico[topo_historico].ciclos_executados = ciclos_executados;
+    historico[topo_historico].instrucoes_executadas = instrucoes_executadas;
+    historico[topo_historico].qtd_tipo_r = qtd_tipo_r;
+    historico[topo_historico].qtd_addi = qtd_addi;
+    historico[topo_historico].qtd_beq = qtd_beq;
+    historico[topo_historico].qtd_lw = qtd_lw;
+    historico[topo_historico].qtd_sw = qtd_sw;
+    historico[topo_historico].qtd_jump = qtd_jump;
+    historico[topo_historico].qtd_invalidas = qtd_invalidas;
+
+    topo_historico++;
+}
+
+int stepback(int memoria[], int registradores[], int *PC) {
+    if (topo_historico == 0) {
+        printf("Nao ha estado anterior para voltar.\n");
+        return 0;
+    }
+
+    topo_historico--;
+
+    for (int i = 0; i < 256; i++) {
+        memoria[i] = historico[topo_historico].memoria[i];
+    }
+
+    for (int i = 0; i < 8; i++) {
+        registradores[i] = historico[topo_historico].registradores[i];
+    }
+
+    *PC = historico[topo_historico].PC;
+    RI = historico[topo_historico].RI;
+    A = historico[topo_historico].A;
+    B = historico[topo_historico].B;
+    ULAout = historico[topo_historico].ULAout;
+    RDM = historico[topo_historico].RDM;
+    estado = historico[topo_historico].estado;
+    ciclos_executados = historico[topo_historico].ciclos_executados;
+    instrucoes_executadas = historico[topo_historico].instrucoes_executadas;
+    qtd_tipo_r = historico[topo_historico].qtd_tipo_r;
+    qtd_addi = historico[topo_historico].qtd_addi;
+    qtd_beq = historico[topo_historico].qtd_beq;
+    qtd_lw = historico[topo_historico].qtd_lw;
+    qtd_sw = historico[topo_historico].qtd_sw;
+    qtd_jump = historico[topo_historico].qtd_jump;
+    qtd_invalidas = historico[topo_historico].qtd_invalidas;
+
+    printf("\n[STEPBACK] Voltou para Estado: %s | PC=%d\n", nome_estado(estado), *PC);
+    return 1;
+}
+
+void limpar_historico() {
+    topo_historico = 0;
 }
 
 void guardarIR(int instrucao){
@@ -242,6 +351,7 @@ int lerULAout(){
     return ULAout;
 }
 void ciclo(int mem[], int regs[], int *PC) {
+    int estado_anterior = estado;
     decode c = campos(RI);
     sinaisControle s = gerarSinais(estado, c.opcode, c.funct);
     int flag = 0;
@@ -266,13 +376,52 @@ void ciclo(int mem[], int regs[], int *PC) {
     if (s.Branch && flag)*PC = ULAout;
 
     estado = proximo_estado(estado, c.opcode);
+    ciclos_executados++;
+
+    if (estado == BUSCA && estado_anterior != BUSCA) {
+        instrucoes_executadas++;
+
+        switch (c.opcode) {
+            case 0:
+                qtd_tipo_r++;
+                break;
+            case 4:
+                qtd_addi++;
+                break;
+            case 8:
+                qtd_beq++;
+                break;
+            case 11:
+                qtd_lw++;
+                break;
+            case 15:
+                qtd_sw++;
+                break;
+            case 2:
+                qtd_jump++;
+                break;
+            default:
+                qtd_invalidas++;
+                break;
+        }
+    }
 }
-void imprimir_estado_cpu(int PC){
+void imprimir_estado_cpu(int PC, int *regs){
     printf("\n=== Estado da CPU ===\n");
     printf("PC = %d\n", PC);
     printf("RI = %d\n", RI);
     printf("ULAout = %d\n", ULAout);
     printf("RDM = %d\n", RDM);
+    
+    if (estado == DECODE) {
+        decode c = campos(RI);
+        printf("A = %d ($%d)\n", regs[c.rs], c.rs);
+        printf("B = %d ($%d)\n", regs[c.rt], c.rt);
+    } else {
+        printf("A = %d\n", A);
+        printf("B = %d\n", B);
+    }
+    
     printf("Estado = %d\n", estado);
 }
 void imprimir_registradores(int registradores[]) {
@@ -281,8 +430,37 @@ void imprimir_registradores(int registradores[]) {
         printf("$%d = %d\n", i, registradores[i]);
     }
 }
+
+void imprimir_estatisticas(int PC, int num_instrucoes) {
+    double cpi = 0.0;
+
+    if (instrucoes_executadas > 0) {
+        cpi = (double)ciclos_executados / instrucoes_executadas;
+    }
+
+    printf("\n=== Estatisticas ===\n");
+    printf("Instrucoes carregadas: %d\n", num_instrucoes);
+    printf("Instrucoes concluidas: %d\n", instrucoes_executadas);
+    printf("Ciclos executados: %d\n", ciclos_executados);
+    printf("CPI medio: %.2f\n", cpi);
+    printf("PC atual: %d\n", PC);
+    printf("Estado atual: %s\n", nome_estado(estado));
+
+    printf("\n--- Por tipo ---\n");
+    printf("Tipo R: %d\n", qtd_tipo_r);
+    printf("ADDI: %d\n", qtd_addi);
+    printf("BEQ: %d\n", qtd_beq);
+    printf("LW: %d\n", qtd_lw);
+    printf("SW: %d\n", qtd_sw);
+    printf("JUMP: %d\n", qtd_jump);
+
+    if (qtd_invalidas > 0) {
+        printf("Invalidas/desconhecidas: %d\n", qtd_invalidas);
+    }
+}
+
 void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados) {
-    printf("\n=== MEMÓRIA ===\n\n");
+    printf("\n=== MEMORIA ===\n\n");
     for (int i = 0; i < num_instrucoes; i++) {
         char buf[100];
         instrucao_para_asm(memoria[i], buf);
@@ -295,16 +473,106 @@ void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados) {
         printf("mem[%d] = %d\n", i, memoria[i]);
     }
 }
+const char *nome_estado(int estado_atual) {
+    const char *nomes_estado[] = {
+        "BUSCA","DECODE","EXEC","WRITE","MEM_ADDR",
+        "MEM_READ","MEM_WRITEBACK","MEM_WRITE","BRANCH","JUMP"
+    };
+
+    if (estado_atual < BUSCA || estado_atual > JUMP) {
+        return "DESCONHECIDO";
+    }
+
+    return nomes_estado[estado_atual];
+}
+
+void imprimir_step_estado(int memoria[], int registradores[], int PC) {
+    decode c = campos(RI);
+    char asm_str[64];
+    int instrucao_atual = (estado == BUSCA) ? memoria[PC] : RI;
+
+    instrucao_para_asm(instrucao_atual, asm_str);
+
+    printf("\n[STEP] Estado: %s | PC=%d | %s\n", nome_estado(estado), PC, asm_str);
+    printf("Instrucao binaria: ");
+    for (int i = 15; i >= 0; i--) {
+        printf("%d", (instrucao_atual >> i) & 1);
+    }
+    printf("\n");
+
+    switch (estado) {
+        case BUSCA:
+            printf("Memoria[%d] -> RI = %d\n", PC, memoria[PC]);
+            printf("ULA: PC + 1 = %d\n", PC + 1);
+            printf("PC recebe %d\n", PC + 1);
+            break;
+
+        case DECODE:
+            printf("RI = %d\n", RI);
+            printf("rs = $%d -> A = %d\n", c.rs, registradores[c.rs]);
+            printf("rt = $%d -> B = %d\n", c.rt, registradores[c.rt]);
+            printf("ULA: PC + imm = %d + %d = %d\n", PC, c.imm, PC + c.imm);
+            break;
+
+        case EXEC:
+            if (c.opcode == 0) {
+                printf("ULA: A(%d) op B(%d), funct=%d\n", A, B, c.funct);
+            } else {
+                printf("ULA: A(%d) op imm(%d)\n", A, c.imm);
+            }
+            break;
+
+        case WRITE:
+            printf("ULAout = %d\n", ULAout);
+            printf("Registrador destino: $%d\n", c.opcode == 0 ? c.rd : c.rt);
+            break;
+
+        case MEM_ADDR:
+            printf("ULA: A(%d) + imm(%d) = endereco de memoria\n", A, c.imm);
+            break;
+
+        case MEM_READ:
+            printf("Endereco: ULAout = %d\n", ULAout);
+            printf("Memoria[%d] -> RDM\n", ULAout);
+            break;
+
+        case MEM_WRITEBACK:
+            printf("RDM = %d\n", RDM);
+            printf("Registrador destino: $%d\n", c.rt);
+            break;
+
+        case MEM_WRITE:
+            printf("Endereco: ULAout = %d\n", ULAout);
+            printf("Valor: B = %d\n", B);
+            printf("Memoria[%d] recebe %d\n", ULAout, B);
+            break;
+
+        case BRANCH:
+            printf("ULA: A(%d) - B(%d)\n", A, B);
+            printf("Se resultado for zero, PC recebe ULAout(%d)\n", ULAout);
+            break;
+
+        case JUMP:
+            printf("Endereco do jump: %d\n", c.addr);
+            printf("PC recebe %d\n", c.addr);
+            break;
+    }
+}
+
 void step(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes){
+    (void)num_instrucoes;
+
+    salvar_estado(memoria_instrucao, registradores, *PC);
+    imprimir_step_estado(memoria_instrucao, registradores, *PC);
     ciclo(memoria_instrucao, registradores, PC);
-    imprimir_estado_cpu(*PC);
-    imprimir_registradores(registradores);
+    printf("[STEP] Proximo estado: %s | PC=%d\n", nome_estado(estado), *PC);
 }
 
 void run(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes) {
     while (estado != BUSCA || *PC < num_instrucoes) {
+        printf("\n--- STEP ---\n");
         ciclo(memoria_instrucao, registradores, PC);        
-        imprimir_estado_cpu(*PC);
+        imprimir_estado_cpu(*PC, registradores);
         imprimir_registradores(registradores);
     }
     imprimir_memoria_ID(memoria_instrucao, num_instrucoes, 256 - num_instrucoes);
