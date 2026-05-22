@@ -477,6 +477,27 @@ void imprimir_estatisticas(int PC, int num_instrucoes) {
     }
 }
 
+void imprimir_sinais_atuais(void) {
+    decode c = campos(RI);
+    sinaisControle s = gerarSinais(estado, c.opcode, c.funct);
+
+    printf("\n=== Sinais de Controle [%s] ===\n", nome_estado(estado));
+    printf("PCEsc       = %d\n", s.PCEsc);
+    printf("IouD        = %d\n", s.IouD);
+    printf("EscMem      = %d\n", s.EscMem);
+    printf("IREsc       = %d\n", s.IREsc);
+    printf("LerRegs     = %d\n", s.LerRegs);
+    printf("LerMem      = %d\n", s.LerMem);
+    printf("MemParaReg  = %d\n", s.MemParaReg);
+    printf("EscReg      = %d\n", s.EscReg);
+    printf("RegDst      = %d\n", s.RegDst);
+    printf("ULAFonteA   = %d\n", s.ULAFonteA);
+    printf("ULAFonteB   = %d\n", s.ULAFonteB);
+    printf("ULAControle = %d\n", s.ULAControle);
+    printf("PCFonte     = %d\n", s.PCFonte);
+    printf("Branch      = %d\n", s.Branch);
+}
+
 void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados) {
     char bin[17];
     printf("\n=== MEMORIA ===\n\n");
@@ -513,22 +534,13 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
 
     instrucao_para_asm(instrucao_atual, asm_str);
 
-    printf("\n[STEP] Estado: %s | PC=%d | %s\n", nome_estado(estado), PC, asm_str);
-    printf("Instrucao binaria: ");
-    for (int i = 15; i >= 0; i--) {
-        printf("%d", (instrucao_atual >> i) & 1);
-    }
-    printf("\n");
+    char bin_instr[17];
+    to_bin(instrucao_atual, 16, bin_instr);
+    printf("\n[STEP] Estado: %s | PC=%d | %s | %s\n", nome_estado(estado), PC, bin_instr, asm_str);
 
     switch (estado) {
-        case BUSCA: {
-            char ri_bin[17];
-            to_bin(memoria[PC], 16, ri_bin);
-            printf("Memoria[%d] -> RI = %s\n", PC, ri_bin);
-            printf("ULA: PC + 1 = %d\n", PC + 1);
-            printf("PC recebe %d\n", PC + 1);
+        case BUSCA:
             break;
-        }
 
         case DECODE: {
             char ri_bin[17];
@@ -591,7 +603,6 @@ void step(int memoria_instrucao[], int registradores[], int *PC, int num_instruc
     salvar_estado(memoria_instrucao, registradores, *PC);
     imprimir_step_estado(memoria_instrucao, registradores, *PC);
     ciclo(memoria_instrucao, registradores, PC);
-    printf("[STEP] Proximo estado: %s | PC=%d\n", nome_estado(estado), *PC);
 }
 
 void run(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes) {
