@@ -104,10 +104,10 @@ int main() {
                 printf("Opcao invalida. Tente novamente.\n");
         }
 
-        if (opcao != 0) {
+        if (opcao != 0 && opcao != 1 && opcao != 2 && opcao != 3 && opcao != 7) {
             imprimir_estado_cpu(PC, registradores);
             // stepback restaura o estado anterior: usa estado atual (ja restaurado)
-            // outras opcoes: usam estado antes da acao para mostrar sinais do ciclo executado
+            // demais opcoes: usa estado antes da acao para mostrar sinais do ciclo executado
             int est_display = (opcao == 6) ? estado : estado_antes;
             imprimir_sinais_atuais(est_display);
         }
