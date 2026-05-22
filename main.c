@@ -27,9 +27,10 @@ int main() {
         printf(" |                                                  |\n");
         printf(" |         [4] Executar programa  (Run)             |\n");
         printf(" |         [5] Executar um ciclo  (Step)            |\n");
+        printf(" |         [6] Voltar um ciclo (Stepback)           |\n");
         printf(" |                                                  |\n");
-        printf(" |         [6] Estatisticas                         |\n");
-        printf(" ║         [7] Mostrar Assembly                     ║\n");
+        printf(" |         [7] Estatisticas                         |\n");
+        printf(" |         [8] Mostrar Assembly                     |\n");
         printf(" |         [0] Sair                                 |\n");
         printf(" |                                                  |\n");
         printf(" ----------------------------------------------------\n");
@@ -49,6 +50,7 @@ int main() {
                 PC = 0;
                 estado = BUSCA;
                 inicializar_registradores(registradores);
+                limpar_historico();
                 num_instrucoes = leitura_arquivo_mem(memoria, nome);
                 break;
             }
@@ -74,7 +76,7 @@ int main() {
                     instrucao_para_asm(estado == BUSCA ? memoria[PC] : RI, asm_str);
                     printf("[%s] PC=%d | %s\n", nomes_estado[estado], PC, asm_str);
                     ciclo(memoria, registradores, &PC);
-                    imprimir_estado_cpu(PC);
+                    imprimir_estado_cpu(PC, registradores);
                     imprimir_registradores(registradores);
                 }
                 printf("\n--- Execucao concluida ---\n");
@@ -84,25 +86,19 @@ int main() {
             case 5: {
                 if (num_instrucoes == 0) { printf("Carregue um arquivo .mem primeiro.\n"); break; }
 
-                const char *nomes_estado[] = {
-                    "BUSCA","DECODE","EXEC","WRITE","MEM_ADDR",
-                    "MEM_READ","MEM_WRITEBACK","MEM_WRITE","BRANCH","JUMP"
-                };
-
-                char asm_str[64];
-                instrucao_para_asm(estado == BUSCA ? memoria[PC] : RI, asm_str);
-
-                printf("\n[STEP] PC=%d | Estado: %s | %s\n", PC, nomes_estado[estado], asm_str);
-                ciclo(memoria, registradores, &PC);
-                printf("[STEP] Proximo estado: %s\n", nomes_estado[estado]);
-                imprimir_estado_cpu(PC);
-                imprimir_registradores(registradores);
+                step(memoria, registradores, &PC, num_instrucoes);
                 break;
             }
-            case 6:
-                printf("Funcao nao implementada.\n");
+            case 6: {
+                if (num_instrucoes == 0) { printf("Carregue um arquivo .mem primeiro.\n"); break; }
+
+                stepback(memoria, registradores, &PC);
                 break;
-            case 7: {
+            }
+            case 7:
+                imprimir_estatisticas(PC, num_instrucoes);
+                break;
+            case 8: {
             if (num_instrucoes == 0) { printf("Carregue um arquivo .mem primeiro.\n"); break; }
                  printf("\n=== Assembly ===\n");
                     for (int i = 0; i < num_instrucoes; i++) {
