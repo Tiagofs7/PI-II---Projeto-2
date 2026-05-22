@@ -51,13 +51,23 @@ void instrucao_para_asm(int instrucao, char *buf) {
     int fn   =  instrucao & 0x7;
     int imm  =  instrucao & 0x3F; if (imm >= 32) imm -= 64;
 
-    if (op == 0) sprintf(buf, "tipo R: $%d = $%d op $%d (funct=%d)", rd, rs, rt, fn);
-    else if (op == 4)  sprintf(buf, "addi $%d = $%d + %d", rt, rs, imm);
-    else if (op == 8)  sprintf(buf, "beq $%d, $%d, %d",    rs, rt, imm);
-    else if (op == 11) sprintf(buf, "lw $%d, %d($%d)",     rt, imm, rs);
-    else if (op == 15) sprintf(buf, "sw $%d, %d($%d)",     rt, imm, rs);
-    else if (op == 2)  sprintf(buf, "jump %d", instrucao & 0xFF);
-    else sprintf(buf, "op=%d", op);
+    if (op == 0) {
+        const char *nome;
+        switch (fn) {
+            case 0: nome = "add"; break;
+            case 2: nome = "sub"; break;
+            case 4: nome = "and"; break;
+            case 5: nome = "or";  break;
+            default: nome = "???"; break;
+        }
+        sprintf(buf, "%s $%d, $%d, $%d", nome, rd, rs, rt);
+    }
+    else if (op == 4)  sprintf(buf, "addi $%d, $%d, %d",  rt, rs, imm);
+    else if (op == 8)  sprintf(buf, "beq $%d, $%d, %d",   rt, rs, imm);
+    else if (op == 11) sprintf(buf, "lw $%d, %d($%d)",    rt, imm, rs);
+    else if (op == 15) sprintf(buf, "sw $%d, %d($%d)",    rt, imm, rs);
+    else if (op == 2)  sprintf(buf, "j %d",               instrucao & 0xFF);
+    else               sprintf(buf, "op=%d", op);
 }
 
 void escolher_arquivo_mem(char nome_arquivo[]){
@@ -406,9 +416,18 @@ void ciclo(int mem[], int regs[], int *PC) {
         }
     }
 }
+void to_bin(int val, int bits, char *buf) {
+    unsigned int uval = (unsigned int)val;
+    for (int i = bits - 1; i >= 0; i--)
+        buf[bits - 1 - i] = ((uval >> i) & 1) ? '1' : '0';
+    buf[bits] = '\0';
+}
+
 void imprimir_estado_cpu(int PC, int *regs){
+    char bin[17];
     printf("\n=== Estado da CPU ===\n");
-    printf("RI = %d\n", RI);
+    to_bin(RI, 16, bin);
+    printf("RI= %s\n", bin);
     printf("ULAout = %d\n", ULAout);
     printf("RDM = %d\n", RDM);
     
@@ -459,11 +478,13 @@ void imprimir_estatisticas(int PC, int num_instrucoes) {
 }
 
 void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados) {
+    char bin[17];
     printf("\n=== MEMORIA ===\n\n");
     for (int i = 0; i < num_instrucoes; i++) {
         char buf[100];
         instrucao_para_asm(memoria[i], buf);
-        printf("mem[%d] = %d -> %s\n", i, memoria[i], buf);
+        to_bin(memoria[i], 16, bin);
+        printf("mem[%d] = %s -> %s\n", i, bin, buf);
     }
     int inicio_dados = num_instrucoes;
     int fim_dados = num_instrucoes + tam_dados - 1;
@@ -500,18 +521,24 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
     printf("\n");
 
     switch (estado) {
-        case BUSCA:
-            printf("Memoria[%d] -> RI = %d\n", PC, memoria[PC]);
+        case BUSCA: {
+            char ri_bin[17];
+            to_bin(memoria[PC], 16, ri_bin);
+            printf("Memoria[%d] -> RI = %s\n", PC, ri_bin);
             printf("ULA: PC + 1 = %d\n", PC + 1);
             printf("PC recebe %d\n", PC + 1);
             break;
+        }
 
-        case DECODE:
-            printf("RI = %d\n", RI);
+        case DECODE: {
+            char ri_bin[17];
+            to_bin(RI, 16, ri_bin);
+            printf("RI = %s\n", ri_bin);
             printf("rs = $%d -> A = %d\n", c.rs, registradores[c.rs]);
             printf("rt = $%d -> B = %d\n", c.rt, registradores[c.rt]);
             printf("ULA: PC + imm = %d + %d = %d\n", PC, c.imm, PC + c.imm);
             break;
+        }
 
         case EXEC:
             if (c.opcode == 0) {
