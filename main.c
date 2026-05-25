@@ -39,7 +39,6 @@ int main() {
         getchar();
 
 
-        int estado_antes = estado;
         switch (opcao) {
             case 1: {
                 char nome[100];
@@ -60,7 +59,7 @@ int main() {
                 printf("Carregue um arquivo .mem primeiro.\n"); 
                 break; 
             }
-                imprimir_memoria_ID(memoria, num_instrucoes);
+                imprimir_memoria_ID(memoria, num_instrucoes, 256 - num_instrucoes);
                 break;
             case 3:
                 imprimir_registradores(registradores);
@@ -68,8 +67,20 @@ int main() {
             case 4: {
                 if (num_instrucoes == 0) { printf("Carregue um arquivo .mem primeiro.\n"); break; }
                 printf("\n--- Iniciando Execucao ---\n");
-                run(memoria, registradores, &PC, num_instrucoes);
+                const char *nomes_estado[] = {
+                    "BUSCA","DECODE","EXEC","WRITE","MEM_ADDR",
+                    "MEM_READ","MEM_WRITEBACK","MEM_WRITE","BRANCH","JUMP"
+                };
+                while (estado != BUSCA || PC < num_instrucoes) {
+                    char asm_str[64];
+                    instrucao_para_asm(estado == BUSCA ? memoria[PC] : RI, asm_str);
+                    printf("[%s] PC=%d | %s\n", nomes_estado[estado], PC, asm_str);
+                    ciclo(memoria, registradores, &PC);
+                    imprimir_estado_cpu(registradores);
+                    imprimir_registradores(registradores);
+                }
                 printf("\n--- Execucao concluida ---\n");
+                imprimir_memoria_ID(memoria, num_instrucoes, 256 - num_instrucoes);
                 break;
             }
             case 5: {
@@ -89,11 +100,11 @@ int main() {
                 break;
             case 8: {
             if (num_instrucoes == 0) { printf("Carregue um arquivo .mem primeiro.\n"); break; }
-                printf("\n=== Assembly ===\n");
+                 printf("\n=== Assembly ===\n");
                     for (int i = 0; i < num_instrucoes; i++) {
                             char asm_str[64];
-                instrucao_para_asm(memoria[i], asm_str);
-                printf("mem[%d]: %s\n", i, asm_str);
+                 instrucao_para_asm(memoria[i], asm_str);
+                 printf("mem[%d]: %s\n", i, asm_str);
                 }
     break;
 }
@@ -102,14 +113,6 @@ int main() {
                 break;
             default:
                 printf("Opcao invalida. Tente novamente.\n");
-        }
-
-        if (opcao != 0 && opcao != 1 && opcao != 2 && opcao != 3 && opcao != 7) {
-            imprimir_estado_cpu(PC, registradores);
-            // stepback restaura o estado anterior: usa estado atual (ja restaurado)
-            // demais opcoes: usa estado antes da acao para mostrar sinais do ciclo executado
-            int est_display = (opcao == 6) ? estado : estado_antes;
-            imprimir_sinais_atuais(est_display);
         }
     } while (opcao != 0);
 
