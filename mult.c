@@ -4,6 +4,8 @@
 #include "simulador.h"
 
 #define MAX_HISTORICO 1000
+#define INICIO_DADOS 128
+#define TAM_MEMORIA 256
 
 typedef struct {
     int memoria[256];
@@ -43,6 +45,32 @@ int qtd_invalidas = 0;
 EstadoSimulador historico[MAX_HISTORICO];
 int topo_historico = 0;
 
+static int valor_dado_memoria(const char *binario) {
+    int valor = (int)strtol(binario, NULL, 2) & 0xFF;
+    if (valor >= 128) {
+        valor -= 256;
+    }
+    return valor;
+}
+
+static int endereco_dados(int endereco_logico) {
+    return INICIO_DADOS + endereco_logico;
+}
+
+static int token_binario_16(const char *texto) {
+    if (strlen(texto) != 16) {
+        return 0;
+    }
+
+    for (int i = 0; texto[i] != '\0'; i++) {
+        if (texto[i] != '0' && texto[i] != '1') {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 void instrucao_para_asm(int instrucao, char *buf) {
     int op   = (instrucao >> 12) & 0xF;
     int rs   = (instrucao >> 9)  & 0x7;
@@ -70,6 +98,20 @@ void instrucao_para_asm(int instrucao, char *buf) {
     else               sprintf(buf, "op=%d", op);
 }
 
+void escolher_arquivo_mem(char nome_arquivo[]){
+    FILE *arquivo;
+
+    printf("\nDigite o nome do arquivo .mem: ");
+    scanf("%s", nome_arquivo);
+    arquivo = fopen(nome_arquivo, "r");
+    printf("Arquivo carregado.\n");
+    if (arquivo == NULL) {
+        printf("Erro: o arquivo %s nao foi encontrado.\n", nome_arquivo);
+    }
+
+    fclose(arquivo);
+}
+
 int leitura_arquivo_mem(int memoria[], char nome_arquivo[]) {
     FILE *arquivo = fopen(nome_arquivo, "r");
     if (arquivo == NULL) {
@@ -77,27 +119,35 @@ int leitura_arquivo_mem(int memoria[], char nome_arquivo[]) {
         return 0;
     }
 
-    char linha[200];
-    int i = 0, dados = 0;
+    char linha[100];
+    int i = 0, dados = 0, prox_dado = INICIO_DADOS;
 
-    while (fgets(linha, sizeof(linha), arquivo)) {
-        char *comentario = strstr(linha, "//");    // remove comentario
-        if (comentario) *comentario = '\0';
-        linha[strcspn(linha, "\r\n")] = '\0';      // remove quebra de linha
-
-        char *token = strtok(linha, " \t");        // pega primeiro token
-        if (!token || token[0] == '\0') continue;  // linha vazia, pula
-
-        if (strcmp(token, ".data") == 0) { dados = 1; continue; }
+    while (fscanf(arquivo, "%s", linha) != EOF) {
+        if (strcmp(linha, ".data") == 0) { dados = 1; continue; }
 
         if (dados) {
-            char *sep = strchr(token, ':');
+            char *sep = strchr(linha, ':');
             if (sep) {
+                int endereco;
                 *sep = '\0';
-                memoria[atoi(token)] = (int)strtol(sep+1, NULL, 2);
+                endereco = atoi(linha);
+                if (endereco >= INICIO_DADOS && endereco < TAM_MEMORIA) {
+                    memoria[endereco] = valor_dado_memoria(sep + 1);
+                }
+            } else if (!token_binario_16(linha)) {
+                char valor[100];
+                int endereco = atoi(linha);
+                if (fscanf(arquivo, "%s", valor) == 1 &&
+                    endereco >= INICIO_DADOS && endereco < TAM_MEMORIA) {
+                    memoria[endereco] = valor_dado_memoria(valor);
+                }
+            } else if (prox_dado < TAM_MEMORIA) {
+                memoria[prox_dado++] = valor_dado_memoria(linha);
             }
         } else {
-            memoria[i++] = (int)strtol(token, NULL, 2);
+            if (i < INICIO_DADOS) {
+                memoria[i++] = (int)strtol(linha, NULL, 2);
+            }
         }
     }
 
@@ -204,6 +254,14 @@ void limpar_historico() {
     topo_historico = 0;
 }
 
+void guardarIR(int instrucao){
+    RI = instrucao;
+    
+}
+
+int retornarIR(){
+    return RI;
+}
 
 // MUX de 2 entradas (para sinais de controle de 1 bit)
 int MUX2(int entrada0, int entrada1, int controle) {
@@ -357,12 +415,12 @@ void ciclo(int mem[], int regs[], int *PC) {
     int ula_A = MUX2(*PC, A, s.ULAFonteA);
     int ula_B = MUX4(B, 1, c.imm, c.imm, s.ULAFonteB);
     int res = ULA(ula_A, ula_B, s.ULAControle, &flag);
-    int end = MUX2(*PC, ULAout, s.IouD);
+    int end = s.IouD ? endereco_dados(ULAout) : *PC;
 
     if (s.IREsc) RI  = mem[end];
     if (s.LerRegs) { A   = regs[c.rs]; B = regs[c.rt]; }
-    if (s.LerMem && !s.IREsc) RDM = mem[end];
-    if (s.EscMem) mem[end] = B;
+    if (s.LerMem && !s.IREsc && end >= INICIO_DADOS && end < TAM_MEMORIA) RDM = mem[end];
+    if (s.EscMem && end >= INICIO_DADOS && end < TAM_MEMORIA) mem[end] = B;
 
     if (estado==BUSCA || estado==DECODE || estado==EXEC || estado==MEM_ADDR)
         ULAout = res;
@@ -411,7 +469,7 @@ void to_bin(int val, int bits, char *buf) {
     buf[bits] = '\0';
 }
 
-void imprimir_estado_cpu(int PC, int *regs){
+void imprimir_estado_cpu(int *regs){
     char bin[17];
     printf("\n=== Estado da CPU ===\n");
     to_bin(RI, 16, bin);
@@ -465,77 +523,19 @@ void imprimir_estatisticas(int PC, int num_instrucoes) {
     }
 }
 
-void imprimir_sinais_atuais(int est) {
-    decode c = campos(RI);
-    sinaisControle s = gerarSinais(est, c.opcode, c.funct);
-
-    printf("\n=== Sinais de Controle [%s] ===\n", nome_estado(est));
-    switch (est) {
-        case BUSCA:
-            printf("IREsc       = %d\n", s.IREsc);
-            printf("LerMem      = %d\n", s.LerMem);
-            printf("ULAFonteB   = %d\n", s.ULAFonteB);
-            printf("ULAControle = %d\n", s.ULAControle);
-            printf("PCEsc       = %d\n", s.PCEsc);
-            printf("PCFonte     = %d\n", s.PCFonte);
-            break;
-        case DECODE:
-            printf("LerRegs     = %d\n", s.LerRegs);
-            printf("ULAFonteB   = %d\n", s.ULAFonteB);
-            printf("ULAControle = %d\n", s.ULAControle);
-            break;
-        case EXEC:
-            printf("ULAFonteA   = %d\n", s.ULAFonteA);
-            printf("ULAFonteB   = %d\n", s.ULAFonteB);
-            printf("ULAControle = %d\n", s.ULAControle);
-            break;
-        case WRITE:
-            printf("EscReg      = %d\n", s.EscReg);
-            printf("RegDst      = %d\n", s.RegDst);
-            printf("MemParaReg  = %d\n", s.MemParaReg);
-            break;
-        case MEM_ADDR:
-            printf("ULAFonteA   = %d\n", s.ULAFonteA);
-            printf("ULAFonteB   = %d\n", s.ULAFonteB);
-            printf("ULAControle = %d\n", s.ULAControle);
-            break;
-        case MEM_READ:
-            printf("IouD        = %d\n", s.IouD);
-            printf("LerMem      = %d\n", s.LerMem);
-            break;
-        case MEM_WRITEBACK:
-            printf("EscReg      = %d\n", s.EscReg);
-            printf("MemParaReg  = %d\n", s.MemParaReg);
-            break;
-        case MEM_WRITE:
-            printf("IouD        = %d\n", s.IouD);
-            printf("EscMem      = %d\n", s.EscMem);
-            break;
-        case BRANCH:
-            printf("ULAFonteA   = %d\n", s.ULAFonteA);
-            printf("ULAControle = %d\n", s.ULAControle);
-            printf("Branch      = %d\n", s.Branch);
-            printf("PCFonte     = %d\n", s.PCFonte);
-            break;
-        case JUMP:
-            printf("PCEsc       = %d\n", s.PCEsc);
-            printf("PCFonte     = %d\n", s.PCFonte);
-            break;
-    }
-}
-
-void imprimir_memoria_ID(int memoria[], int num_instrucoes) {
+void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados) {
+    (void)tam_dados;
     char bin[17];
-    printf("\n=== Memoria de Instrucoes (0-127) ===\n");
-    for (int i = 0; i < 128; i++) {
+    printf("\n=== MEMORIA DE INSTRUCOES ===\n\n");
+    for (int i = 0; i < num_instrucoes; i++) {
         char buf[100];
         instrucao_para_asm(memoria[i], buf);
         to_bin(memoria[i], 16, bin);
         printf("mem[%d] = %s -> %s\n", i, bin, buf);
     }
 
-    printf("\n=== Memoria de Dados (128-255) ===\n");
-    for (int i = 128; i <= 255; i++) {
+    printf("\n=== MEMORIA DE DADOS ===\n\n");
+    for (int i = INICIO_DADOS; i < TAM_MEMORIA; i++) {
         printf("mem[%d] = %d\n", i, memoria[i]);
     }
 }
@@ -552,20 +552,87 @@ const char *nome_estado(int estado_atual) {
     return nomes_estado[estado_atual];
 }
 
+static void imprimir_sinal(const char *nome, int valor) {
+    printf("%-12s = %d\n", nome, valor);
+}
+
+static void imprimir_sinais_etapa(int estado_atual, sinaisControle s) {
+    printf("\n=== Sinais de Controle [%s] ===\n", nome_estado(estado_atual));
+
+    switch (estado_atual) {
+        case BUSCA:
+            imprimir_sinal("PCEsc", s.PCEsc);
+            imprimir_sinal("IouD", s.IouD);
+            imprimir_sinal("IREsc", s.IREsc);
+            imprimir_sinal("LerMem", s.LerMem);
+            imprimir_sinal("ULAFonteA", s.ULAFonteA);
+            imprimir_sinal("ULAFonteB", s.ULAFonteB);
+            imprimir_sinal("ULAControle", s.ULAControle);
+            imprimir_sinal("PCFonte", s.PCFonte);
+            break;
+        case DECODE:
+            imprimir_sinal("LerRegs", s.LerRegs);
+            imprimir_sinal("ULAFonteA", s.ULAFonteA);
+            imprimir_sinal("ULAFonteB", s.ULAFonteB);
+            imprimir_sinal("ULAControle", s.ULAControle);
+            break;
+        case EXEC:
+        case MEM_ADDR:
+            imprimir_sinal("ULAFonteA", s.ULAFonteA);
+            imprimir_sinal("ULAFonteB", s.ULAFonteB);
+            imprimir_sinal("ULAControle", s.ULAControle);
+            break;
+        case WRITE:
+            imprimir_sinal("EscReg", s.EscReg);
+            imprimir_sinal("RegDst", s.RegDst);
+            imprimir_sinal("MemParaReg", s.MemParaReg);
+            break;
+        case MEM_READ:
+            imprimir_sinal("IouD", s.IouD);
+            imprimir_sinal("LerMem", s.LerMem);
+            break;
+        case MEM_WRITEBACK:
+            imprimir_sinal("EscReg", s.EscReg);
+            imprimir_sinal("MemParaReg", s.MemParaReg);
+            imprimir_sinal("RegDst", s.RegDst);
+            break;
+        case MEM_WRITE:
+            imprimir_sinal("IouD", s.IouD);
+            imprimir_sinal("EscMem", s.EscMem);
+            break;
+        case BRANCH:
+            imprimir_sinal("ULAFonteA", s.ULAFonteA);
+            imprimir_sinal("ULAFonteB", s.ULAFonteB);
+            imprimir_sinal("ULAControle", s.ULAControle);
+            imprimir_sinal("Branch", s.Branch);
+            imprimir_sinal("PCFonte", s.PCFonte);
+            break;
+        case JUMP:
+            imprimir_sinal("PCEsc", s.PCEsc);
+            imprimir_sinal("PCFonte", s.PCFonte);
+            break;
+    }
+}
+
 void imprimir_step_estado(int memoria[], int registradores[], int PC) {
     decode c = campos(RI);
     char asm_str[64];
     int instrucao_atual = (estado == BUSCA) ? memoria[PC] : RI;
 
     instrucao_para_asm(instrucao_atual, asm_str);
+    c = campos(instrucao_atual);
 
-    char bin_instr[17];
-    to_bin(instrucao_atual, 16, bin_instr);
-    printf("\n[STEP] Estado: %s | PC=%d | %s | %s\n", nome_estado(estado), PC, bin_instr, asm_str);
+    printf("\n[STEP] Estado: %s | PC=%d | %s\n", nome_estado(estado), PC, asm_str);
 
     switch (estado) {
-        case BUSCA:
+        case BUSCA: {
+            char ri_bin[17];
+            to_bin(memoria[PC], 16, ri_bin);
+            printf("Memoria[%d] -> RI = %s\n", PC, ri_bin);
+            printf("ULA: PC + 1 = %d\n", PC + 1);
+            printf("PC recebe %d\n", PC + 1);
             break;
+        }
 
         case DECODE: {
             char ri_bin[17];
@@ -573,7 +640,11 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
             printf("RI = %s\n", ri_bin);
             printf("rs = $%d -> A = %d\n", c.rs, registradores[c.rs]);
             printf("rt = $%d -> B = %d\n", c.rt, registradores[c.rt]);
-            printf("ULA: PC + imm = %d + %d = %d\n", PC, c.imm, PC + c.imm);
+            if (c.opcode == 0) {
+                printf("ULA: PC + imm(rd+funct) = %d + %d = %d\n", PC, c.imm, PC + c.imm);
+            } else {
+                printf("ULA: PC + imm = %d + %d = %d\n", PC, c.imm, PC + c.imm);
+            }
             break;
         }
 
@@ -595,8 +666,8 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
             break;
 
         case MEM_READ:
-            printf("Endereco: ULAout = %d\n", ULAout);
-            printf("Memoria[%d] -> RDM\n", ULAout);
+            printf("Endereco logico: ULAout = %d\n", ULAout);
+            printf("Memoria[%d] -> RDM\n", endereco_dados(ULAout));
             break;
 
         case MEM_WRITEBACK:
@@ -605,9 +676,9 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
             break;
 
         case MEM_WRITE:
-            printf("Endereco: ULAout = %d\n", ULAout);
+            printf("Endereco logico: ULAout = %d\n", ULAout);
             printf("Valor: B = %d\n", B);
-            printf("Memoria[%d] recebe %d\n", ULAout, B);
+            printf("Memoria[%d] recebe %d\n", endereco_dados(ULAout), B);
             break;
 
         case BRANCH:
@@ -624,19 +695,24 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
 
 void step(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes){
     (void)num_instrucoes;
+    int estado_executado = estado;
+    decode c = campos((estado == BUSCA) ? memoria_instrucao[*PC] : RI);
+    sinaisControle s = gerarSinais(estado_executado, c.opcode, c.funct);
 
     salvar_estado(memoria_instrucao, registradores, *PC);
     imprimir_step_estado(memoria_instrucao, registradores, *PC);
     ciclo(memoria_instrucao, registradores, PC);
+    imprimir_estado_cpu(registradores);
+    imprimir_sinais_etapa(estado_executado, s);
+    printf("[STEP] Proximo estado: %s | PC=%d\n", nome_estado(estado), *PC);
 }
 
 void run(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes) {
-    while (estado != BUSCA || *PC < 128) {
-        int est_antes = estado;
-        salvar_estado(memoria_instrucao, registradores, *PC);
-        imprimir_step_estado(memoria_instrucao, registradores, *PC);
-        ciclo(memoria_instrucao, registradores, PC);
-        imprimir_estado_cpu(*PC, registradores);
-        imprimir_sinais_atuais(est_antes);
+    while (estado != BUSCA || *PC < num_instrucoes) {
+        printf("\n--- STEP ---\n");
+        ciclo(memoria_instrucao, registradores, PC);        
+        imprimir_estado_cpu(registradores);
+        imprimir_registradores(registradores);
     }
+    imprimir_memoria_ID(memoria_instrucao, num_instrucoes, 256 - num_instrucoes);
 }
