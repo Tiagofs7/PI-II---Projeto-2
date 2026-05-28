@@ -26,7 +26,7 @@ typedef struct {
     int qtd_sw;
     int qtd_jump;
     int qtd_invalidas;
-} EstadoSimulador;
+} Estado;
 
 int RI;
 int A,B;
@@ -42,7 +42,7 @@ int qtd_lw = 0;
 int qtd_sw = 0;
 int qtd_jump = 0;
 int qtd_invalidas = 0;
-EstadoSimulador historico[MAX_HISTORICO];
+Estado historico[MAX_HISTORICO];
 int topo_historico = 0;
 
 static int valor_dado_memoria(const char *binario) {
@@ -104,11 +104,12 @@ void escolher_arquivo_mem(char nome_arquivo[]){
     printf("\nDigite o nome do arquivo .mem: ");
     scanf("%s", nome_arquivo);
     arquivo = fopen(nome_arquivo, "r");
-    printf("Arquivo carregado.\n");
     if (arquivo == NULL) {
         printf("Erro: o arquivo %s nao foi encontrado.\n", nome_arquivo);
+        return;
     }
 
+    printf("Arquivo carregado.\n");
     fclose(arquivo);
 }
 
@@ -468,7 +469,6 @@ void to_bin(int val, int bits, char *buf) {
         buf[bits - 1 - i] = ((uval >> i) & 1) ? '1' : '0';
     buf[bits] = '\0';
 }
-
 void imprimir_estado_cpu(int *regs){
     char bin[17];
     printf("\n=== Estado da CPU ===\n");
@@ -526,17 +526,17 @@ void imprimir_estatisticas(int PC, int num_instrucoes) {
 void imprimir_memoria_ID(int memoria[], int num_instrucoes, int tam_dados) {
     (void)tam_dados;
     char bin[17];
-    printf("\n=== MEMORIA DE INSTRUCOES ===\n\n");
-    for (int i = 0; i < num_instrucoes; i++) {
-        char buf[100];
-        instrucao_para_asm(memoria[i], buf);
-        to_bin(memoria[i], 16, bin);
-        printf("mem[%d] = %s -> %s\n", i, bin, buf);
-    }
 
-    printf("\n=== MEMORIA DE DADOS ===\n\n");
-    for (int i = INICIO_DADOS; i < TAM_MEMORIA; i++) {
-        printf("mem[%d] = %d\n", i, memoria[i]);
+    printf("\n=== MEMORIA ===\n\n");
+    for (int i = 0; i < TAM_MEMORIA; i++) {
+        if (i < num_instrucoes) {
+            char buf[100];
+            instrucao_para_asm(memoria[i], buf);
+            to_bin(memoria[i], 16, bin);
+            printf("mem[%03d] = %s -> %s\n", i, bin, buf);
+        } else {
+            printf("mem[%03d] = %d\n", i, memoria[i]);
+        }
     }
 }
 const char *nome_estado(int estado_atual) {
@@ -551,11 +551,9 @@ const char *nome_estado(int estado_atual) {
 
     return nomes_estado[estado_atual];
 }
-
 static void imprimir_sinal(const char *nome, int valor) {
     printf("%-12s = %d\n", nome, valor);
 }
-
 static void imprimir_sinais_etapa(int estado_atual, sinaisControle s) {
     printf("\n=== Sinais de Controle [%s] ===\n", nome_estado(estado_atual));
 
@@ -613,7 +611,6 @@ static void imprimir_sinais_etapa(int estado_atual, sinaisControle s) {
             break;
     }
 }
-
 void imprimir_step_estado(int memoria[], int registradores[], int PC) {
     decode c = campos(RI);
     char asm_str[64];
@@ -621,7 +618,6 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
 
     instrucao_para_asm(instrucao_atual, asm_str);
     c = campos(instrucao_atual);
-
     printf("\n[STEP] Estado: %s | PC=%d | %s\n", nome_estado(estado), PC, asm_str);
 
     switch (estado) {
@@ -633,7 +629,6 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
             printf("PC recebe %d\n", PC + 1);
             break;
         }
-
         case DECODE: {
             char ri_bin[17];
             to_bin(RI, 16, ri_bin);
@@ -667,7 +662,11 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
 
         case MEM_READ:
             printf("Endereco logico: ULAout = %d\n", ULAout);
-            printf("Memoria[%d] -> RDM\n", endereco_dados(ULAout));
+            if (endereco_dados(ULAout) >= INICIO_DADOS && endereco_dados(ULAout) < TAM_MEMORIA) {
+                printf("Memoria[%d] -> RDM\n", endereco_dados(ULAout));
+            } else {
+                printf("Endereco de memoria invalido: %d\n", endereco_dados(ULAout));
+            }
             break;
 
         case MEM_WRITEBACK:
@@ -678,7 +677,11 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
         case MEM_WRITE:
             printf("Endereco logico: ULAout = %d\n", ULAout);
             printf("Valor: B = %d\n", B);
-            printf("Memoria[%d] recebe %d\n", endereco_dados(ULAout), B);
+            if (endereco_dados(ULAout) >= INICIO_DADOS && endereco_dados(ULAout) < TAM_MEMORIA) {
+                printf("Memoria[%d] recebe %d\n", endereco_dados(ULAout), B);
+            } else {
+                printf("Endereco de memoria invalido: %d\n", endereco_dados(ULAout));
+            }
             break;
 
         case BRANCH:
@@ -694,7 +697,11 @@ void imprimir_step_estado(int memoria[], int registradores[], int PC) {
 }
 
 void step(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes){
-    (void)num_instrucoes;
+    if (estado == BUSCA && *PC >= num_instrucoes) {
+        printf("Nao ha proxima instrucao para executar.\n");
+        return;
+    }
+
     int estado_executado = estado;
     decode c = campos((estado == BUSCA) ? memoria_instrucao[*PC] : RI);
     sinaisControle s = gerarSinais(estado_executado, c.opcode, c.funct);
@@ -705,14 +712,12 @@ void step(int memoria_instrucao[], int registradores[], int *PC, int num_instruc
     imprimir_estado_cpu(registradores);
     imprimir_sinais_etapa(estado_executado, s);
     printf("[STEP] Proximo estado: %s | PC=%d\n", nome_estado(estado), *PC);
+    printf("\n==================================================\n");
 }
 
 void run(int memoria_instrucao[], int registradores[], int *PC, int num_instrucoes) {
     while (estado != BUSCA || *PC < num_instrucoes) {
-        printf("\n--- STEP ---\n");
-        ciclo(memoria_instrucao, registradores, PC);        
-        imprimir_estado_cpu(registradores);
-        imprimir_registradores(registradores);
+        step(memoria_instrucao, registradores, PC, num_instrucoes);
     }
     imprimir_memoria_ID(memoria_instrucao, num_instrucoes, 256 - num_instrucoes);
 }
